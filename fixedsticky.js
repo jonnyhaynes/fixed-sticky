@@ -25,13 +25,16 @@
 			plugin: 'fixedsticky',
 			active: 'fixedsticky-on',
 			inactive: 'fixedsticky-off',
+			container: 'fixedsticky-container',
+			transitionTop: 'fixedsticky-off-transition-top',
+			transitionBottom: 'fixedsticky-off-transition-bottom',
 			clone: 'fixedsticky-dummy',
 			withoutFixedFixed: 'fixedsticky-withoutfixedfixed'
 		},
 		keys: {
 			offset: 'fixedStickyOffset',
 			position: 'fixedStickyPosition',
-			id: 'fixedStickyId'
+			top: 'fixedStickyTopWhileOn'
 		},
 		tests: {
 			sticky: featureTest( 'position', 'sticky' ),
@@ -98,31 +101,59 @@
 				$el.data( S.keys.position, position );
 			}
 
-			function isFixedToTop() {
-				var offsetTop = scroll + elTop;
+			function isFixedToTopOfViewport( ignoreHeight ) {
+				var offsetTop = scroll + ( elTop || $el.data( S.keys.top ) || 0 );
 
 				// Initial Offset Top
 				return initialOffset < offsetTop &&
 					// Container Bottom
-					offsetTop + height <= parentOffset + parentHeight;
+					offsetTop + ( ignoreHeight ? 0 : height ) <= parentOffset + parentHeight;
 			}
 
-			function isFixedToBottom() {
+			function isFixedToBottomOfViewport( ignoreHeight ) {
 				// Initial Offset Top + Height
-				return initialOffset + ( height || 0 ) > scroll + viewportHeight - elBottom &&
+				return initialOffset + ( !height || ignoreHeight ? 0 : height ) > scroll + viewportHeight - elBottom &&
 					// Container Top
-					scroll + viewportHeight - elBottom >= parentOffset + ( height || 0 );
+					scroll + viewportHeight - elBottom >= parentOffset + ( !height || ignoreHeight ? 0 : height );
+			}
+
+			function isTransitionOnBottom() {
+				return isFixedToTopOfViewport( true );
+			}
+
+			function isTransitionOnTop() {
+				return isFixedToBottomOfViewport( true );
+			}
+
+			function addTransition() {
+				if( isTransitionOnBottom() ) {
+					$el.parent().addClass( S.classes.container );
+					$el.addClass( S.classes.transitionBottom );
+				} else if( isTransitionOnTop() ) {
+					$el.parent().addClass( S.classes.container );
+					$el.addClass( S.classes.transitionTop );
+				}
+			}
+
+			function removeTransition() {
+				$el.parent().removeClass( S.classes.container );
+				$el.removeClass( S.classes.transitionTop + ' ' + S.classes.transitionBottom );
 			}
 
 			elTop = getPx( $el.css( 'top' ) );
 			elBottom = getPx( $el.css( 'bottom' ) );
-
-			if( position.top && isFixedToTop() || position.bottom && isFixedToBottom() ) {
+			if( position.top && isFixedToTopOfViewport() || position.bottom && isFixedToBottomOfViewport() ) {
 				if( !isAlreadyOn ) {
+					if( !$el.data( S.keys.top ) ) {
+						$el.data( S.keys.top, elTop );
+					}
 					toggle( true );
+					removeTransition();
 				}
 			} else {
 				if( isAlreadyOn ) {
+					addTransition();
+
 					toggle( false );
 				}
 			}
@@ -134,15 +165,15 @@
 			}
 
 			return $el.each(function() {
-				var $this = $( this );
-				var id = $this.data( S.keys.id );
-				$( win ).unbind( '.fixedsticky' + id );
-
-				$this
-					.removeData( [ S.keys.offset, S.keys.position, S.keys.id ] )
+				var $t = $( this );
+				$t.removeData( [ S.keys.offset, S.keys.position, S.keys.top ] )
 					.removeClass( S.classes.active )
 					.removeClass( S.classes.inactive )
+					.removeClass( S.classes.transitionTop )
+					.removeClass( S.classes.transitionBottom )
 					.next( '.' + S.classes.clone ).remove();
+
+				$t.parent().removeClass( S.classes.container );
 			});
 		},
 		init: function( el ) {
